@@ -3,6 +3,30 @@ import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client.js'
 import { useAuthStore } from '../store/authStore.js'
 
+const Icon = ({ d, size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+)
+
+function Avatar({ name, color, size = 28 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: `linear-gradient(135deg, ${color || '#7c6ffd'}, ${color ? color + 'aa' : '#a78bfa'})`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontWeight: 700, fontSize: size * 0.38, color: '#fff',
+    }}>
+      {name?.[0]?.toUpperCase()}
+    </div>
+  )
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function ChatPage() {
   const { roomId } = useParams()
   const navigate = useNavigate()
@@ -12,6 +36,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [activeRoom, setActiveRoom] = useState(null)
   const [newRoomName, setNewRoomName] = useState('')
+  const [showNewRoom, setShowNewRoom] = useState(false)
   const wsRef = useRef(null)
   const bottomRef = useRef(null)
   const wid = currentWorkspace?.id
@@ -30,27 +55,17 @@ export default function ChatPage() {
     navigate(`/chat/${room.id}`)
     setMessages([])
     api.get(`/api/workspaces/${wid}/chat/rooms/${room.id}/messages`).then(r => setMessages(r.data))
-    connectWs(room.id)
-  }
-
-  function connectWs(rid) {
     wsRef.current?.close()
     const apiBase = import.meta.env.VITE_API_URL || ''
-    // Chat WS is served under the REST API prefix, not /ws
     const wsBase = apiBase.replace(/^http/, 'ws')
-    const ws = new WebSocket(`${wsBase}/api/workspaces/${wid}/chat/rooms/${rid}/ws?token=${accessToken}`)
+    const ws = new WebSocket(`${wsBase}/api/workspaces/${wid}/chat/rooms/${room.id}/ws?token=${accessToken}`)
     ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data)
-        setMessages(m => [...m, msg])
-      } catch {}
+      try { setMessages(m => [...m, JSON.parse(e.data)]) } catch {}
     }
     wsRef.current = ws
   }
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   function sendMessage() {
     if (!input.trim() || !wsRef.current || wsRef.current.readyState !== 1) return
@@ -63,83 +78,136 @@ export default function ChatPage() {
     const { data } = await api.post(`/api/workspaces/${wid}/chat/rooms`, { name: newRoomName.trim() })
     setRooms(r => [...r, data])
     setNewRoomName('')
+    setShowNewRoom(false)
     selectRoom(data)
   }
 
-  function formatTime(ts) {
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  // Group consecutive messages by same author
+  const grouped = messages.reduce((acc, msg, i) => {
+    const prev = messages[i - 1]
+    const isFirst = !prev || prev.author_id !== msg.author_id ||
+      new Date(msg.created_at) - new Date(prev.created_at) > 300000
+    acc.push({ ...msg, isFirst })
+    return acc
+  }, [])
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      {/* Room list */}
-      <div style={{ width: 200, borderRight: '1px solid var(--border)', padding: 12, overflowY: 'auto', flexShrink: 0 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Channels</div>
-        {rooms.map(r => (
-          <div key={r.id} onClick={() => selectRoom(r)}
-            style={{
-              padding: '6px 8px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
-              background: activeRoom?.id === r.id ? 'rgba(99,102,241,0.1)' : 'transparent',
-              color: activeRoom?.id === r.id ? 'var(--primary)' : 'var(--text-muted)',
-            }}>
-            # {r.name}
+    <div className="panel-layout">
+      {/* Sidebar */}
+      <div className="panel-sidebar">
+        <div className="panel-sidebar-header">
+          <span className="panel-sidebar-title">Channels</span>
+          <button onClick={() => setShowNewRoom(s => !s)} className="btn-icon" title="New channel">
+            <Icon d="M12 5v14 M5 12h14" size={14} />
+          </button>
+        </div>
+
+        {showNewRoom && (
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+            <input
+              autoFocus
+              value={newRoomName}
+              onChange={e => setNewRoomName(e.target.value)}
+              placeholder="channel-name"
+              style={{ marginBottom: 6 }}
+              onKeyDown={e => { if (e.key === 'Enter') createRoom(); if (e.key === 'Escape') setShowNewRoom(false) }}
+            />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={createRoom} className="btn-primary" style={{ flex: 1, padding: '5px', fontSize: 12, justifyContent: 'center' }}>Create</button>
+              <button onClick={() => setShowNewRoom(false)} className="btn-ghost" style={{ padding: '5px 8px', fontSize: 12 }}>Cancel</button>
+            </div>
           </div>
-        ))}
-        <div style={{ marginTop: 12, display: 'flex', gap: 4 }}>
-          <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)}
-            placeholder="New channel…" style={{ flex: 1, fontSize: 12 }}
-            onKeyDown={e => e.key === 'Enter' && createRoom()} />
-          <button onClick={createRoom} className="btn-ghost" style={{ padding: '4px 8px' }}>+</button>
+        )}
+
+        <div className="panel-sidebar-list">
+          {rooms.map(r => (
+            <div
+              key={r.id}
+              onClick={() => selectRoom(r)}
+              className={`panel-sidebar-item ${activeRoom?.id === r.id ? 'active' : ''}`}
+            >
+              <span style={{ color: 'var(--text-subtle)', fontSize: 13, fontWeight: 500 }}>#</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</span>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className="panel-content">
         {activeRoom ? (
           <>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>
-              # {activeRoom.name}
+            <div className="panel-topbar">
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>#</span>
+              <span className="panel-topbar-title">{activeRoom.name}</span>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {messages.map((msg, i) => {
-                const isMe = msg.author_id === user?.id
-                return (
-                  <div key={msg.id || i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                      background: msg.avatar_color || 'var(--primary)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 700, color: '#fff',
-                    }}>
-                      {msg.username?.[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 2 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{msg.username}</span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatTime(msg.created_at)}</span>
-                      </div>
-                      <div style={{ background: 'var(--bg-2)', borderRadius: 8, padding: '6px 10px', display: 'inline-block', maxWidth: 480, wordBreak: 'break-word' }}>
-                        {msg.body}
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {grouped.map((msg, i) => (
+                <div key={msg.id || i}>
+                  {msg.isFirst && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 16 }}>
+                      <Avatar name={msg.username} color={msg.avatar_color} size={30} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 3 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{msg.username}</span>
+                          <span style={{ color: 'var(--text-subtle)', fontSize: 11 }}>{formatTime(msg.created_at)}</span>
+                        </div>
+                        <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.body}</div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )}
+                  {!msg.isFirst && (
+                    <div style={{ paddingLeft: 40, fontSize: 14, color: 'var(--text-2)', lineHeight: 1.5, wordBreak: 'break-word', marginTop: 1 }}>
+                      {msg.body}
+                    </div>
+                  )}
+                </div>
+              ))}
               <div ref={bottomRef} />
             </div>
-            <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-              <input
-                value={input} onChange={e => setInput(e.target.value)}
-                placeholder={`Message #${activeRoom.name}…`}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                style={{ flex: 1 }}
-              />
-              <button onClick={sendMessage} className="btn-primary">Send</button>
+
+            {/* Input */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-2)' }}>
+              <div style={{
+                display: 'flex', gap: 8, alignItems: 'center',
+                background: 'var(--bg-3)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-lg)', padding: '6px 6px 6px 14px',
+                transition: 'border-color var(--t)',
+              }}
+                onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--border-focus)'}
+                onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              >
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder={`Message #${activeRoom.name}…`}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  style={{ flex: 1, background: 'transparent', border: 'none', padding: 0, fontSize: 13, boxShadow: 'none' }}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!input.trim()}
+                  style={{
+                    padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                    background: input.trim() ? 'var(--primary-grad)' : 'var(--bg-4)',
+                    color: input.trim() ? '#fff' : 'var(--text-muted)',
+                    border: 'none', cursor: input.trim() ? 'pointer' : 'default',
+                    transition: 'all var(--t)', boxShadow: input.trim() ? 'var(--shadow-primary)' : 'none',
+                  }}
+                >
+                  Send
+                </button>
+              </div>
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-            Select a channel
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+            </div>
+            <div className="empty-state-title">Select a channel</div>
+            <div className="empty-state-desc">Pick a channel from the sidebar to start chatting</div>
           </div>
         )}
       </div>
