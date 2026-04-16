@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore.js'
+import { useThemeStore } from '../../store/themeStore.js'
 import api from '../../api/client.js'
+import InviteModal from '../ui/InviteModal.jsx'
 
 /* ─── SVG Icons ──────────────────────────────────────────────── */
 const Icon = ({ d, size = 16 }) => (
@@ -64,9 +66,17 @@ function Avatar({ name, color, size = 30 }) {
 /* ─── Shell ──────────────────────────────────────────────────── */
 export default function WorkspaceShell({ children }) {
   const { user, currentWorkspace, workspaces, setCurrentWorkspace, logout } = useAuthStore()
+  const { theme, setTheme } = useThemeStore()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
-  const [wsOpen, setWsOpen] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
+
+  const THEME_CYCLE = { dark: 'dim', dim: 'light', light: 'dark' }
+  const THEME_ICON = {
+    dark:  'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
+    dim:   'M12 3v1 M12 20v1 M4.22 4.22l.71.71 M18.36 18.36l.71.71 M3 12h1 M20 12h1 M4.22 19.78l.71-.71 M18.36 5.64l.71-.71 M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7z',
+    light: 'M12 3v1 M12 20v1 M4.22 4.22l.71.71 M18.36 18.36l.71.71 M3 12h1 M20 12h1 M4.22 19.78l.71-.71 M18.36 5.64l.71-.71 M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7z',
+  }
 
   async function handleLogout() {
     const refreshToken = useAuthStore.getState().refreshToken
@@ -77,6 +87,7 @@ export default function WorkspaceShell({ children }) {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside style={{
         width: collapsed ? 60 : 228,
@@ -224,6 +235,24 @@ export default function WorkspaceShell({ children }) {
                   {user?.email}
                 </div>
               </div>
+              <button
+                onClick={() => setShowInvite(true)}
+                className="btn-icon"
+                title="Invite member"
+                style={{ flexShrink: 0 }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8v6 M22 11h-6" /></svg>
+              </button>
+              <button
+                onClick={() => setTheme(THEME_CYCLE[theme])}
+                className="btn-icon"
+                title={`Theme: ${theme}`}
+                style={{ flexShrink: 0 }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d={THEME_ICON[theme]} />
+                </svg>
+              </button>
               <button
                 onClick={handleLogout}
                 className="btn-icon"

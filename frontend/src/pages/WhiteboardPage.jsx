@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client.js'
 import { useAuthStore } from '../store/authStore.js'
@@ -9,14 +9,12 @@ const ExcalidrawWrapper = React.lazy(() =>
     default: function ExcalidrawWrapped({ boardId, accessToken }) {
       const { Excalidraw } = mod
       const [elements, setElements] = React.useState([])
-      const [wsReady, setWsReady] = React.useState(false)
       const wsRef = React.useRef(null)
 
       React.useEffect(() => {
         const wsBase = import.meta.env.VITE_WS_URL || `ws://${location.host}`
         const ws = new WebSocket(`${wsBase}/ws/collab/whiteboard:${boardId}?token=${accessToken}`)
         ws.binaryType = 'arraybuffer'
-        ws.onopen = () => setWsReady(true)
         wsRef.current = ws
         return () => ws.close()
       }, [boardId])
@@ -59,37 +57,76 @@ export default function WhiteboardPage() {
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
-      <div style={{ width: 200, borderRight: '1px solid var(--border)', padding: 12, overflowY: 'auto', flexShrink: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontWeight: 600 }}>Whiteboards</span>
-          <button onClick={createBoard} className="btn-ghost" style={{ padding: '4px 8px' }}>+</button>
-        </div>
-        {boards.map(b => (
-          <div key={b.id}
-            onClick={() => { setActiveBoard(b); navigate(`/whiteboard/${b.id}`) }}
-            style={{
-              padding: '6px 8px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
-              background: activeBoard?.id === b.id ? 'rgba(99,102,241,0.1)' : 'transparent',
-              color: activeBoard?.id === b.id ? 'var(--primary)' : 'var(--text)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-            ✏️ {b.title}
+      {/* Sidebar */}
+      <div style={{
+        width: 220, flexShrink: 0,
+        borderRight: '1px solid var(--border)',
+        background: 'var(--bg-2)',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '14px 14px 10px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.8" strokeLinecap="round"><path d="M12 20h9 M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>Whiteboards</span>
           </div>
-        ))}
+          <button onClick={createBoard} className="btn-icon" title="New whiteboard" style={{ color: 'var(--primary)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14 M5 12h14" /></svg>
+          </button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+          {boards.length === 0 && (
+            <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--text-subtle)', fontSize: 12 }}>
+              No whiteboards yet
+            </div>
+          )}
+          {boards.map(b => (
+            <button key={b.id}
+              onClick={() => { setActiveBoard(b); navigate(`/whiteboard/${b.id}`) }}
+              style={{
+                width: '100%', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 10px', borderRadius: 'var(--radius)',
+                border: 'none', cursor: 'pointer', marginBottom: 1,
+                background: activeBoard?.id === b.id ? 'var(--primary-dim)' : 'transparent',
+                color: activeBoard?.id === b.id ? 'var(--primary)' : 'var(--text-muted)',
+                fontSize: 13, fontWeight: activeBoard?.id === b.id ? 500 : 400,
+                transition: 'all var(--t-fast)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                boxShadow: activeBoard?.id === b.id ? 'inset 0 0 0 1px rgba(124,111,253,0.15)' : 'none',
+              }}
+              onMouseEnter={e => { if (activeBoard?.id !== b.id) e.currentTarget.style.background = 'var(--bg-hover)' }}
+              onMouseLeave={e => { if (activeBoard?.id !== b.id) e.currentTarget.style.background = 'transparent' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ flexShrink: 0 }}><path d="M12 20h9 M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'hidden' }}>
+      {/* Canvas area */}
+      <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
         {activeBoard ? (
-          <React.Suspense fallback={<div style={{ padding: 24, color: 'var(--text-muted)' }}>Loading whiteboard…</div>}>
+          <React.Suspense fallback={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
+              Loading whiteboard…
+            </div>
+          }>
             <ExcalidrawWrapper boardId={activeBoard.id} accessToken={accessToken} />
           </React.Suspense>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', height: '100%' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>✏️</div>
-              <p>Select a whiteboard or create a new one</p>
-              <button onClick={createBoard} className="btn-primary" style={{ marginTop: 16 }}>New Whiteboard</button>
+          <div className="empty-state" style={{ height: '100%', justifyContent: 'center' }}>
+            <div className="empty-state-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M12 20h9 M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
             </div>
+            <div className="empty-state-title">No whiteboard selected</div>
+            <div className="empty-state-desc">Create a new whiteboard to start drawing</div>
+            <button onClick={createBoard} className="btn-primary" style={{ marginTop: 8 }}>New Whiteboard</button>
           </div>
         )}
       </div>

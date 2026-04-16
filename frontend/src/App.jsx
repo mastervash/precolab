@@ -1,6 +1,8 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore.js'
+import ToastContainer from './components/ui/Toast.jsx'
+import './store/themeStore.js' // apply saved theme on load
 import WorkspaceShell from './components/layout/WorkspaceShell.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
@@ -29,6 +31,8 @@ function PublicRoute({ children }) {
 
 export default function App() {
   return (
+    <>
+    <ToastContainer />
     <Routes>
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
@@ -56,5 +60,6 @@ export default function App() {
         }
       />
     </Routes>
+    </>
   )
 }
