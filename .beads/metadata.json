@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "precolab",
+  "project_id": "362ecb6e-0d3d-4716-9d1a-7d8a731677bd"
+}

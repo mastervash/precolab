@@ -5,3 +5,8 @@ uploads/
 *.log
 .DS_Store
 .claude/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
