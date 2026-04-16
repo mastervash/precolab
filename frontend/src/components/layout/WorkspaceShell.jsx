@@ -26,6 +26,7 @@ const ICONS = {
   calendar:  'M3 4h18v18H3z M16 2v4 M8 2v4 M3 10h18',
   polls:     'M18 20V10 M12 20V4 M6 20v-6',
   activity:  'M22 12h-4l-3 9L9 3l-3 9H2',
+  settings:  'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   collapse:  'M15 18l-6-6 6-6',
   expand:    'M9 18l6-6-6-6',
   logout:    'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4 M16 17l5-5-5-5 M21 12H9',
@@ -45,6 +46,7 @@ const NAV = [
   { to: '/calendar',   icon: 'calendar',    label: 'Calendar' },
   { to: '/polls',      icon: 'polls',       label: 'Polls' },
   { to: '/activity',   icon: 'activity',    label: 'Activity' },
+  { to: '/settings',   icon: 'settings',    label: 'Settings' },
 ]
 
 /* ─── Avatar ─────────────────────────────────────────────────── */

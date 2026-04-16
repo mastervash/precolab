@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client.js'
 import { useAuthStore } from '../store/authStore.js'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite')
   const setAuth = useAuthStore((s) => s.setAuth)
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
@@ -17,7 +19,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/api/auth/login', form)
       setAuth(data.user, data.workspaces, data.accessToken, data.refreshToken)
-      navigate('/')
+      navigate(inviteToken ? `/join?invite=${inviteToken}` : '/')
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed')
     } finally {

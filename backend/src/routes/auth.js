@@ -239,6 +239,40 @@ export default async function authRoutes(fastify) {
     })
   })
 
+  // POST /api/auth/invite/:token/accept — authenticated: existing user joins workspace
+  fastify.post('/invite/:token/accept', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    const { token } = request.params
+    const client = await fastify.pg.connect()
+    try {
+      const { rows: [invite] } = await client.query(
+        `SELECT id, workspace_id, role FROM workspace_invites
+         WHERE token = $1 AND used_at IS NULL AND expires_at > NOW()`,
+        [token]
+      )
+      if (!invite) return reply.code(410).send({ error: 'Invite link is invalid or expired' })
+
+      await client.query(
+        `INSERT INTO workspace_members (workspace_id, user_id, role)
+         VALUES ($1, $2, $3) ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = $3`,
+        [invite.workspace_id, request.user.id, invite.role]
+      )
+      await client.query(
+        `UPDATE workspace_invites SET used_at = NOW(), used_by = $1 WHERE id = $2`,
+        [request.user.id, invite.id]
+      )
+
+      const { rows: [workspace] } = await client.query(
+        `SELECT id, name, slug FROM workspaces WHERE id = $1`,
+        [invite.workspace_id]
+      )
+      return reply.send({ workspace, role: invite.role })
+    } finally {
+      client.release()
+    }
+  })
+
   // POST /api/auth/logout
   fastify.post('/logout', async (request, reply) => {
     const { refreshToken } = request.body || {}

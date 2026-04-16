@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 
 export default async function pollsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   fastify.get('/', async (request, reply) => {
     const { rows: polls } = await fastify.pg.query(
@@ -30,7 +32,7 @@ export default async function pollsRoutes(fastify) {
     })))
   })
 
-  fastify.post('/', {
+  fastify.post('/', { // editor+ only
     schema: {
       body: {
         type: 'object', required: ['question', 'options'],
@@ -42,6 +44,7 @@ export default async function pollsRoutes(fastify) {
       },
     },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const { question, options, closesAt } = request.body
     const client = await fastify.pg.connect()
@@ -83,6 +86,7 @@ export default async function pollsRoutes(fastify) {
   })
 
   fastify.delete('/:pollId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     await fastify.pg.query('DELETE FROM polls WHERE id = $1 AND created_by = $2',
       [request.params.pollId, request.user.id])
     return reply.send({ ok: true })

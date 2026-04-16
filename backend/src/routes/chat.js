@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 
 export default async function chatRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   // GET /rooms
   fastify.get('/rooms', async (request, reply) => {
@@ -17,6 +19,7 @@ export default async function chatRoutes(fastify) {
   fastify.post('/rooms', {
     schema: { body: { type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 100 } } } },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const { rows: [room] } = await fastify.pg.query(
       `INSERT INTO chat_rooms (workspace_id, name) VALUES ($1, $2) RETURNING *`,

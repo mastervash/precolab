@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import api from '../api/client.js'
 import { useAuthStore } from '../store/authStore.js'
+import CommentThread from '../components/ui/CommentThread.jsx'
 
 const Icon = ({ d, size = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -21,6 +22,7 @@ export default function KanbanPage() {
   const [newBoardTitle, setNewBoardTitle] = useState('')
   const [showNewBoard, setShowNewBoard] = useState(false)
   const [newCardText, setNewCardText] = useState({})
+  const [selectedCard, setSelectedCard] = useState(null)
 
   const wid = currentWorkspace?.id
 
@@ -179,6 +181,7 @@ export default function KanbanPage() {
                                 ref={prov.innerRef}
                                 {...prov.draggableProps}
                                 {...prov.dragHandleProps}
+                                onClick={() => !snap.isDragging && setSelectedCard(card)}
                                 style={{
                                   ...prov.draggableProps.style,
                                   background: snap.isDragging ? 'var(--bg-4)' : 'var(--bg-3)',
@@ -186,7 +189,7 @@ export default function KanbanPage() {
                                   borderRadius: 'var(--radius)',
                                   padding: '10px 12px',
                                   marginBottom: 6,
-                                  cursor: 'grab',
+                                  cursor: snap.isDragging ? 'grabbing' : 'pointer',
                                   boxShadow: snap.isDragging ? 'var(--shadow-lg)' : 'none',
                                   transition: snap.isDragging ? 'none' : 'all var(--t-fast)',
                                 }}
@@ -259,6 +262,59 @@ export default function KanbanPage() {
           <div className="empty-state-title">No boards yet</div>
           <div className="empty-state-desc">Create your first board to get started organizing work</div>
           <button onClick={() => setShowNewBoard(true)} className="btn-primary" style={{ marginTop: 8 }}>Create Board</button>
+        </div>
+      )}
+
+      {/* Card detail modal */}
+      {selectedCard && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}
+          onClick={e => e.target === e.currentTarget && setSelectedCard(null)}
+        >
+          <div style={{
+            background: 'var(--bg-2)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-hover)',
+            width: '100%', maxWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+            boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
+          }}>
+            {/* Modal header */}
+            <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', lineHeight: 1.4, flex: 1 }}>
+                  {selectedCard.title}
+                </h3>
+                <button onClick={() => setSelectedCard(null)} className="btn-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18 M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+                {selectedCard.assignee_username && (
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span style={{ color: 'var(--text-subtle)' }}>Assignee </span>@{selectedCard.assignee_username}
+                  </span>
+                )}
+                {selectedCard.due_date && (
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span style={{ color: 'var(--text-subtle)' }}>Due </span>
+                    {new Date(selectedCard.due_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                )}
+                {selectedCard.labels?.length > 0 && selectedCard.labels.map(l => (
+                  <span key={l} style={{ background: 'var(--primary-dim)', color: 'var(--primary)', borderRadius: 4, padding: '1px 6px', fontSize: 10, border: '1px solid rgba(124,111,253,0.2)', fontWeight: 500 }}>{l}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Description + Comments */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
+              {selectedCard.description && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Description</div>
+                  <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{selectedCard.description}</p>
+                </div>
+              )}
+              <CommentThread entityType="card" entityId={selectedCard.id} />
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 
 export default async function todosRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   fastify.get('/', async (request, reply) => {
     const { workspaceId } = request.params
@@ -22,6 +24,7 @@ export default async function todosRoutes(fastify) {
   fastify.post('/lists', {
     schema: { body: { type: 'object', required: ['title'], properties: { title: { type: 'string', maxLength: 200 } } } },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const { rows: [list] } = await fastify.pg.query(
       `INSERT INTO todo_lists (workspace_id, title, created_by) VALUES ($1, $2, $3) RETURNING *`,
@@ -31,7 +34,7 @@ export default async function todosRoutes(fastify) {
     return reply.code(201).send(list)
   })
 
-  fastify.post('/lists/:listId/items', {
+  fastify.post('/lists/:listId/items', { // editor+
     schema: {
       body: {
         type: 'object', required: ['text'],
@@ -43,6 +46,7 @@ export default async function todosRoutes(fastify) {
       },
     },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId, listId } = request.params
     const { text, assigneeId, dueDate } = request.body
     const { rows: [{ max_pos }] } = await fastify.pg.query(
@@ -58,6 +62,7 @@ export default async function todosRoutes(fastify) {
   })
 
   fastify.patch('/items/:itemId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { itemId, workspaceId } = request.params
     const allowed = ['text', 'completed', 'assignee_id', 'due_date', 'position']
     const fields = Object.keys(request.body).filter(k => allowed.includes(k))
@@ -73,6 +78,7 @@ export default async function todosRoutes(fastify) {
   })
 
   fastify.delete('/items/:itemId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { itemId, workspaceId } = request.params
     await fastify.pg.query('DELETE FROM todo_items WHERE id = $1', [itemId])
     broadcast(fastify, workspaceId, { type: 'todo_item:deleted', itemId })
@@ -80,6 +86,7 @@ export default async function todosRoutes(fastify) {
   })
 
   fastify.delete('/lists/:listId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { listId, workspaceId } = request.params
     await fastify.pg.query('DELETE FROM todo_lists WHERE id = $1', [listId])
     broadcast(fastify, workspaceId, { type: 'todo_list:deleted', listId })

@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 
 export default async function calendarRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   fastify.get('/', async (request, reply) => {
     const { workspaceId } = request.params
@@ -32,17 +34,19 @@ export default async function calendarRoutes(fastify) {
       },
     },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const { title, description, startAt, endAt, allDay, color } = request.body
     const { rows: [event] } = await fastify.pg.query(
       `INSERT INTO calendar_events (workspace_id, title, description, start_at, end_at, all_day, color, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [workspaceId, title, description, startAt, endAt, allDay || false, color || '#6366f1', request.user.id]
+      [workspaceId, title, description, startAt, endAt, allDay || false, color || '#7c6ffd', request.user.id]
     )
     return reply.code(201).send(event)
   })
 
   fastify.patch('/:id', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const allowed = ['title', 'description', 'start_at', 'end_at', 'all_day', 'color']
     const fields = Object.keys(request.body).filter(k => allowed.includes(k))
     if (fields.length === 0) return reply.code(400).send({ error: 'No valid fields' })
@@ -55,6 +59,7 @@ export default async function calendarRoutes(fastify) {
   })
 
   fastify.delete('/:id', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     await fastify.pg.query('DELETE FROM calendar_events WHERE id = $1', [request.params.id])
     return reply.send({ ok: true })
   })

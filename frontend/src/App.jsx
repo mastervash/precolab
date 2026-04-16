@@ -18,6 +18,8 @@ import FilesPage from './pages/FilesPage.jsx'
 import ActivityPage from './pages/ActivityPage.jsx'
 import PollsPage from './pages/PollsPage.jsx'
 import CalendarPage from './pages/CalendarPage.jsx'
+import SettingsPage from './pages/SettingsPage.jsx'
+import JoinPage from './pages/JoinPage.jsx'
 
 function ProtectedRoute({ children }) {
   const user = useAuthStore((s) => s.user)
@@ -36,6 +38,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      <Route path="/join" element={<JoinPage />} />
       <Route
         path="/*"
         element={
@@ -54,6 +57,7 @@ export default function App() {
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/polls" element={<PollsPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </WorkspaceShell>
           </ProtectedRoute>

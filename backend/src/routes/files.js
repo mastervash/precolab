@@ -1,4 +1,5 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 import { fileTypeFromBuffer } from 'file-type'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -17,6 +18,7 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || '/uploads'
 
 export default async function filesRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   // GET /images
   fastify.get('/images', async (request, reply) => {
@@ -42,6 +44,7 @@ export default async function filesRoutes(fastify) {
 
   // POST /upload
   fastify.post('/upload', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const parts = request.files()
     const uploaded = []
@@ -105,6 +108,7 @@ export default async function filesRoutes(fastify) {
 
   // DELETE /:id
   fastify.delete('/:id', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { rows: [file] } = await fastify.pg.query(
       'SELECT * FROM files WHERE id = $1 AND workspace_id = $2',
       [request.params.id, request.params.workspaceId]

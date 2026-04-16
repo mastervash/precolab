@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 
 export default async function docsRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   // GET /
   fastify.get('/', async (request, reply) => {
@@ -17,6 +19,7 @@ export default async function docsRoutes(fastify) {
   fastify.post('/', {
     schema: { body: { type: 'object', properties: { title: { type: 'string', maxLength: 500 } } } },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const title = request.body?.title || 'Untitled'
     const { rows: [doc] } = await fastify.pg.query(
@@ -41,6 +44,7 @@ export default async function docsRoutes(fastify) {
   fastify.patch('/:docId', {
     schema: { body: { type: 'object', required: ['title'], properties: { title: { type: 'string', maxLength: 500 } } } },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { rows: [doc] } = await fastify.pg.query(
       `UPDATE documents SET title = $1, updated_at = NOW() WHERE id = $2 RETURNING id, title, updated_at`,
       [request.body.title, request.params.docId]
@@ -50,6 +54,7 @@ export default async function docsRoutes(fastify) {
 
   // DELETE /:docId
   fastify.delete('/:docId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     await fastify.pg.query('DELETE FROM documents WHERE id = $1', [request.params.docId])
     return reply.send({ ok: true })
   })

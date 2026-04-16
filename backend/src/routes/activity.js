@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership } from '../middleware/workspace.js'
 
 export default async function activityRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   // GET /api/workspaces/:workspaceId/activity
   fastify.get('/', async (request, reply) => {

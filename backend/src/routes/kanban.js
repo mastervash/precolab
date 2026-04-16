@@ -1,7 +1,9 @@
 import { authenticate } from '../middleware/authenticate.js'
+import { checkMembership, denyViewer } from '../middleware/workspace.js'
 
 export default async function kanbanRoutes(fastify) {
   fastify.addHook('preHandler', authenticate)
+  fastify.addHook('preHandler', checkMembership(fastify))
 
   // GET /boards
   fastify.get('/boards', async (request, reply) => {
@@ -19,6 +21,7 @@ export default async function kanbanRoutes(fastify) {
   fastify.post('/boards', {
     schema: { body: { type: 'object', required: ['title'], properties: { title: { type: 'string', maxLength: 200 } } } },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { workspaceId } = request.params
     const { rows: [board] } = await fastify.pg.query(
       `INSERT INTO boards (workspace_id, title, created_by) VALUES ($1, $2, $3) RETURNING *`,
@@ -53,6 +56,7 @@ export default async function kanbanRoutes(fastify) {
   fastify.post('/boards/:boardId/columns', {
     schema: { body: { type: 'object', required: ['title'], properties: { title: { type: 'string', maxLength: 100 } } } },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { boardId, workspaceId } = request.params
     const { rows: [{ max_pos }] } = await fastify.pg.query(
       `SELECT COALESCE(MAX(position), -1) as max_pos FROM board_columns WHERE board_id = $1`, [boardId]
@@ -81,6 +85,7 @@ export default async function kanbanRoutes(fastify) {
       },
     },
   }, async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { boardId, workspaceId } = request.params
     const { title, columnId, description, assigneeId, dueDate, labels } = request.body
     const { rows: [{ max_pos }] } = await fastify.pg.query(
@@ -98,6 +103,7 @@ export default async function kanbanRoutes(fastify) {
 
   // PATCH /boards/:boardId/cards/:cardId — move or update card
   fastify.patch('/boards/:boardId/cards/:cardId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { cardId, workspaceId } = request.params
     const updates = request.body
     const allowed = ['title', 'description', 'column_id', 'position', 'assignee_id', 'due_date', 'labels']
@@ -116,6 +122,7 @@ export default async function kanbanRoutes(fastify) {
 
   // DELETE /boards/:boardId/cards/:cardId
   fastify.delete('/boards/:boardId/cards/:cardId', async (request, reply) => {
+    if (denyViewer(request, reply)) return
     const { cardId, workspaceId } = request.params
     await fastify.pg.query('DELETE FROM cards WHERE id = $1', [cardId])
     broadcast(fastify, workspaceId, { type: 'card:deleted', cardId })
