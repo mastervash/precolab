@@ -219,6 +219,22 @@ export default {
     );
   `,
 
+  '012_workspace_invites': `
+    CREATE TABLE IF NOT EXISTS workspace_invites (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      role TEXT NOT NULL DEFAULT 'editor' CHECK (role IN ('admin', 'editor', 'viewer')),
+      created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      used_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS workspace_invites_token ON workspace_invites(token);
+  `,
+
   '011_calendar': `
     CREATE TABLE IF NOT EXISTS calendar_events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

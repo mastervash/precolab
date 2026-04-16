@@ -23,11 +23,12 @@ export default async function authRoutes(fastify) {
           email: { type: 'string', format: 'email', maxLength: 255 },
           username: { type: 'string', minLength: 2, maxLength: 30, pattern: '^[a-zA-Z0-9_-]+$' },
           password: { type: 'string', minLength: 8, maxLength: 128 },
+          inviteToken: { type: 'string' },
         },
       },
     },
   }, async (request, reply) => {
-    const { email, username, password } = request.body
+    const { email, username, password, inviteToken } = request.body
     const client = await fastify.pg.connect()
     try {
       const { rows: existing } = await client.query(
@@ -48,6 +49,18 @@ export default async function authRoutes(fastify) {
         [email.toLowerCase(), username.toLowerCase(), passwordHash, color]
       )
 
+      // Validate invite token if provided
+      let inviteRow = null
+      if (inviteToken) {
+        const { rows: [inv] } = await client.query(
+          `SELECT id, workspace_id, role FROM workspace_invites
+           WHERE token = $1 AND used_at IS NULL AND expires_at > NOW()`,
+          [inviteToken]
+        )
+        if (!inv) return reply.code(400).send({ error: 'Invite link is invalid or expired' })
+        inviteRow = inv
+      }
+
       // Create default workspace
       const slug = `${username.toLowerCase()}-${nanoid(6)}`
       const { rows: [workspace] } = await client.query(
@@ -58,18 +71,37 @@ export default async function authRoutes(fastify) {
         `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'admin')`,
         [workspace.id, user.id]
       )
-
-      // Create default general chat room
       await client.query(
         `INSERT INTO chat_rooms (workspace_id, name) VALUES ($1, 'general')`,
         [workspace.id]
+      )
+
+      // Consume invite — join the invited workspace
+      if (inviteRow) {
+        await client.query(
+          `INSERT INTO workspace_members (workspace_id, user_id, role)
+           VALUES ($1, $2, $3) ON CONFLICT (workspace_id, user_id) DO NOTHING`,
+          [inviteRow.workspace_id, user.id, inviteRow.role]
+        )
+        await client.query(
+          `UPDATE workspace_invites SET used_at = NOW(), used_by = $1 WHERE id = $2`,
+          [user.id, inviteRow.id]
+        )
+      }
+
+      const { rows: workspaces } = await client.query(
+        `SELECT w.id, w.name, w.slug, wm.role
+         FROM workspaces w
+         JOIN workspace_members wm ON wm.workspace_id = w.id
+         WHERE wm.user_id = $1`,
+        [user.id]
       )
 
       const { accessToken, refreshToken } = await issueTokens(fastify, client, user)
 
       return reply.code(201).send({
         user: { id: user.id, email: user.email, username: user.username, avatarColor: user.avatar_color },
-        workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug },
+        workspaces,
         accessToken,
         refreshToken,
       })
@@ -184,6 +216,27 @@ export default async function authRoutes(fastify) {
     } finally {
       client.release()
     }
+  })
+
+  // GET /api/auth/invite/:token — public: preview invite before registering
+  fastify.get('/invite/:token', async (request, reply) => {
+    const { token } = request.params
+    const { rows: [invite] } = await fastify.pg.query(
+      `SELECT wi.role, wi.expires_at, wi.used_at, w.name AS workspace_name
+       FROM workspace_invites wi
+       JOIN workspaces w ON w.id = wi.workspace_id
+       WHERE wi.token = $1`,
+      [token]
+    )
+    if (!invite) return reply.code(404).send({ error: 'Invite not found' })
+    if (invite.used_at) return reply.code(410).send({ error: 'Invite already used' })
+    if (new Date(invite.expires_at) < new Date()) return reply.code(410).send({ error: 'Invite expired' })
+
+    return reply.send({
+      workspaceName: invite.workspace_name,
+      role: invite.role,
+      expiresAt: invite.expires_at,
+    })
   })
 
   // POST /api/auth/logout

@@ -5,27 +5,28 @@ import { toast } from './Toast.jsx'
 
 export default function InviteModal({ onClose }) {
   const { currentWorkspace } = useAuthStore()
-  const [email, setEmail] = useState('')
   const [role, setRole] = useState('editor')
   const [loading, setLoading] = useState(false)
+  const [inviteUrl, setInviteUrl] = useState(null)
+  const [copied, setCopied] = useState(false)
 
-  async function handleInvite(e) {
-    e.preventDefault()
-    if (!email.trim()) return
+  async function handleGenerate() {
     setLoading(true)
     try {
-      await api.post(`/api/workspaces/${currentWorkspace.id}/invite`, {
-        email: email.trim(),
-        role,
-      })
-      toast.success(`Invited ${email.trim()} as ${role}`)
-      setEmail('')
-      onClose()
+      const { data } = await api.post(`/api/workspaces/${currentWorkspace.id}/invite`, { role })
+      setInviteUrl(data.url)
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to invite user')
+      toast.error(err.response?.data?.error || 'Failed to generate invite link')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(inviteUrl)
+    setCopied(true)
+    toast.success('Link copied to clipboard')
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -51,7 +52,7 @@ export default function InviteModal({ onClose }) {
               Invite to workspace
             </h3>
             <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-              {currentWorkspace?.name}
+              {currentWorkspace?.name} · link expires in 7 days, single use
             </p>
           </div>
           <button onClick={onClose} className="btn-icon">
@@ -61,17 +62,8 @@ export default function InviteModal({ onClose }) {
           </button>
         </div>
 
-        <form onSubmit={handleInvite} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label>Email address</label>
-            <input
-              type="email" required autoFocus
-              placeholder="teammate@example.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </div>
-
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Role picker */}
           <div>
             <label>Role</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 0 }}>
@@ -83,7 +75,7 @@ export default function InviteModal({ onClose }) {
                 <button
                   key={r.value}
                   type="button"
-                  onClick={() => setRole(r.value)}
+                  onClick={() => { setRole(r.value); setInviteUrl(null) }}
                   style={{
                     padding: '10px 8px',
                     borderRadius: 'var(--radius)',
@@ -102,15 +94,57 @@ export default function InviteModal({ onClose }) {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={loading || !email.trim()}
-            style={{ justifyContent: 'center', padding: '10px', marginTop: 4 }}
-          >
-            {loading ? 'Sending invite…' : 'Send Invite'}
-          </button>
-        </form>
+          {/* Generated URL */}
+          {inviteUrl ? (
+            <div>
+              <label style={{ marginBottom: 6, display: 'block' }}>Invite link</label>
+              <div style={{
+                display: 'flex', gap: 8, alignItems: 'center',
+                background: 'var(--bg-3)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                padding: '8px 12px',
+              }}>
+                <span style={{
+                  flex: 1, fontSize: 12, color: 'var(--text-muted)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {inviteUrl}
+                </span>
+                <button
+                  onClick={handleCopy}
+                  className={copied ? 'btn-primary' : 'btn-ghost'}
+                  style={{ fontSize: 12, flexShrink: 0, padding: '5px 12px' }}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 6 }}>
+                Share this link. It can only be used once and expires in 7 days.
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={handleGenerate}
+              className="btn-primary"
+              disabled={loading}
+              style={{ justifyContent: 'center', padding: '10px' }}
+            >
+              {loading ? 'Generating…' : 'Generate Invite Link'}
+            </button>
+          )}
+
+          {inviteUrl && (
+            <button
+              onClick={handleGenerate}
+              className="btn-ghost"
+              disabled={loading}
+              style={{ fontSize: 12 }}
+            >
+              Generate another link
+            </button>
+          )}
+        </div>
       </div>
 
       <style>{`

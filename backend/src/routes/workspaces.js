@@ -51,23 +51,21 @@ export default async function workspacesRoutes(fastify) {
     }
   })
 
-  // POST /api/workspaces/:id/invite — invite user by email
+  // POST /api/workspaces/:id/invite — generate a one-time invite link
   fastify.post('/:id/invite', {
     schema: {
       body: {
         type: 'object',
-        required: ['email', 'role'],
+        required: ['role'],
         properties: {
-          email: { type: 'string', format: 'email' },
           role: { type: 'string', enum: ['admin', 'editor', 'viewer'] },
         },
       },
     },
   }, async (request, reply) => {
     const { id } = request.params
-    const { email, role } = request.body
+    const { role } = request.body
 
-    // Must be admin
     const { rows: [membership] } = await fastify.pg.query(
       `SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
       [id, request.user.id]
@@ -76,18 +74,17 @@ export default async function workspacesRoutes(fastify) {
       return reply.code(403).send({ error: 'Only admins can invite members' })
     }
 
-    const { rows: [invitee] } = await fastify.pg.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email.toLowerCase()]
-    )
-    if (!invitee) return reply.code(404).send({ error: 'User not found' })
+    const token = nanoid(32)
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
     await fastify.pg.query(
-      `INSERT INTO workspace_members (workspace_id, user_id, role)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = $3`,
-      [id, invitee.id, role]
+      `INSERT INTO workspace_invites (workspace_id, token, role, created_by, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, token, role, request.user.id, expiresAt]
     )
-    return reply.send({ ok: true })
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    return reply.send({ token, url: `${frontendUrl}/register?invite=${token}` })
   })
+
 }

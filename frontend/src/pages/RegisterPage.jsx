@@ -1,14 +1,27 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client.js'
 import { useAuthStore } from '../store/authStore.js'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [form, setForm] = useState({ email: '', username: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const inviteToken = searchParams.get('invite')
+  const [invite, setInvite] = useState(null)      // { workspaceName, role }
+  const [inviteError, setInviteError] = useState('')
+
+  // Look up invite metadata so the page can show workspace context
+  useEffect(() => {
+    if (!inviteToken) return
+    api.get(`/api/auth/invite/${inviteToken}`)
+      .then(r => setInvite(r.data))
+      .catch(err => setInviteError(err.response?.data?.error || 'Invalid invite link'))
+  }, [inviteToken])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -16,8 +29,9 @@ export default function RegisterPage() {
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
     try {
-      const { data } = await api.post('/api/auth/register', form)
-      setAuth(data.user, [data.workspace], data.accessToken, data.refreshToken)
+      const payload = { ...form, ...(inviteToken ? { inviteToken } : {}) }
+      const { data } = await api.post('/api/auth/register', payload)
+      setAuth(data.user, data.workspaces, data.accessToken, data.refreshToken)
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed')
@@ -56,7 +70,6 @@ export default function RegisterPage() {
         pointerEvents: 'none',
       }} />
 
-      {/* Form panel — centered */}
       <div style={{
         flex: 1,
         display: 'flex',
@@ -80,14 +93,59 @@ export default function RegisterPage() {
             <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-0.03em', color: 'var(--text)' }}>PrecoLab</span>
           </div>
 
-          <div style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 6 }}>
-              Create your account
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-              Get started with your team workspace in seconds
-            </p>
-          </div>
+          {/* Invite banner or default heading */}
+          {inviteToken ? (
+            <div style={{ marginBottom: 24 }}>
+              {inviteError ? (
+                <div style={{
+                  padding: '12px 14px',
+                  background: 'rgba(240,69,90,0.08)',
+                  border: '1px solid rgba(240,69,90,0.25)',
+                  borderRadius: 'var(--radius-lg)',
+                  color: 'var(--danger)',
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}>
+                  {inviteError}
+                </div>
+              ) : invite ? (
+                <div style={{
+                  padding: '14px 16px',
+                  background: 'var(--primary-dim)',
+                  border: '1px solid rgba(124,111,253,0.25)',
+                  borderRadius: 'var(--radius-lg)',
+                  marginBottom: 8,
+                }}>
+                  <div style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    You've been invited
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+                    {invite.workspaceName}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    You'll join as <strong style={{ color: 'var(--text)' }}>{invite.role}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ height: 72, background: 'var(--bg-3)', borderRadius: 'var(--radius-lg)', marginBottom: 8 }} />
+              )}
+              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
+                Create your account
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                Register to accept the invite
+              </p>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 28 }}>
+              <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 6 }}>
+                Create your account
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                Get started with your team workspace in seconds
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
@@ -143,7 +201,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               className="btn-primary"
-              disabled={loading}
+              disabled={loading || (inviteToken && !!inviteError)}
               style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontSize: 14, marginTop: 4 }}
             >
               {loading ? (
@@ -151,7 +209,7 @@ export default function RegisterPage() {
                   <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.6s linear infinite' }} />
                   Creating account…
                 </>
-              ) : 'Create account'}
+              ) : inviteToken ? 'Create account & join workspace' : 'Create account'}
             </button>
           </form>
 
@@ -162,9 +220,7 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
