@@ -31,6 +31,14 @@ export default async function authRoutes(fastify) {
     const { email, username, password, inviteToken } = request.body
     const client = await fastify.pg.connect()
     try {
+      // Single-workspace mode: require invite after first user exists
+      if (process.env.WORKSPACE_MODE === 'single') {
+        const { rows: [firstUser] } = await client.query('SELECT id FROM users LIMIT 1')
+        if (firstUser && !inviteToken) {
+          return reply.code(403).send({ error: 'Registration requires an invite link' })
+        }
+      }
+
       const { rows: existing } = await client.query(
         'SELECT id FROM users WHERE email = $1 OR username = $2',
         [email.toLowerCase(), username.toLowerCase()]
@@ -61,20 +69,32 @@ export default async function authRoutes(fastify) {
         inviteRow = inv
       }
 
-      // Create default workspace
-      const slug = `${username.toLowerCase()}-${nanoid(6)}`
-      const { rows: [workspace] } = await client.query(
-        `INSERT INTO workspaces (name, slug, owner_id) VALUES ($1, $2, $3) RETURNING id, name, slug`,
-        [`${username}'s Workspace`, slug, user.id]
-      )
-      await client.query(
-        `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'admin')`,
-        [workspace.id, user.id]
-      )
-      await client.query(
-        `INSERT INTO chat_rooms (workspace_id, name) VALUES ($1, 'general')`,
-        [workspace.id]
-      )
+      // Create workspace:
+      // - Multi mode: always create a personal workspace
+      // - Single mode, no invite (first user): create the shared workspace
+      // - Single mode, with invite: skip — user joins via invite below
+      const shouldCreateWorkspace = process.env.WORKSPACE_MODE !== 'single' || !inviteRow
+      if (shouldCreateWorkspace) {
+        const isSingleFirstUser = process.env.WORKSPACE_MODE === 'single'
+        const workspaceName = isSingleFirstUser
+          ? (process.env.WORKSPACE_NAME || 'Team Workspace')
+          : `${username}'s Workspace`
+        const slug = isSingleFirstUser
+          ? `team-${nanoid(6)}`
+          : `${username.toLowerCase()}-${nanoid(6)}`
+        const { rows: [workspace] } = await client.query(
+          `INSERT INTO workspaces (name, slug, owner_id) VALUES ($1, $2, $3) RETURNING id, name, slug`,
+          [workspaceName, slug, user.id]
+        )
+        await client.query(
+          `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'admin')`,
+          [workspace.id, user.id]
+        )
+        await client.query(
+          `INSERT INTO chat_rooms (workspace_id, name) VALUES ($1, 'general')`,
+          [workspace.id]
+        )
+      }
 
       // Consume invite — join the invited workspace
       if (inviteRow) {
