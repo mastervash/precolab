@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore.js'
 import { useThemeStore } from '../../store/themeStore.js'
+import { useConfigStore } from '../../store/configStore.js'
 import api from '../../api/client.js'
 import InviteModal from '../ui/InviteModal.jsx'
 
@@ -72,6 +73,9 @@ export default function WorkspaceShell({ children }) {
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
+
+  const workspaceMode = useConfigStore((s) => s.workspaceMode)
+  const isAdmin = currentWorkspace?.role === 'admin'
 
   const THEME_CYCLE = { dark: 'dim', dim: 'light', light: 'dark' }
   const THEME_ICON = {
@@ -165,8 +169,8 @@ export default function WorkspaceShell({ children }) {
           </button>
         )}
 
-        {/* Workspace selector */}
-        {!collapsed && (
+        {/* Workspace selector — hidden in single mode */}
+        {!collapsed && workspaceMode === 'multi' && (
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
               Workspace
@@ -237,14 +241,16 @@ export default function WorkspaceShell({ children }) {
                   {user?.email}
                 </div>
               </div>
-              <button
-                onClick={() => setShowInvite(true)}
-                className="btn-icon"
-                title="Invite member"
-                style={{ flexShrink: 0 }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8v6 M22 11h-6" /></svg>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="btn-icon"
+                  title="Invite member"
+                  style={{ flexShrink: 0 }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8v6 M22 11h-6" /></svg>
+                </button>
+              )}
               <button
                 onClick={() => setTheme(THEME_CYCLE[theme])}
                 className="btn-icon"
