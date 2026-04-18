@@ -12,7 +12,7 @@ const ExcalidrawWrapper = React.lazy(() =>
       const wsRef = React.useRef(null)
 
       React.useEffect(() => {
-        const wsBase = import.meta.env.VITE_WS_URL || `ws://${location.host}`
+        const wsBase = import.meta.env.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
         const ws = new WebSocket(`${wsBase}/ws/collab/whiteboard:${boardId}?token=${accessToken}`)
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws

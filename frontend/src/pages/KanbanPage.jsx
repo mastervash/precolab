@@ -36,7 +36,8 @@ export default function KanbanPage() {
 
   useEffect(() => {
     if (!wid || !accessToken) return
-    const wsUrl = (import.meta.env.VITE_WS_URL || `ws://${location.host}`) + `/ws/workspace/${wid}?token=${accessToken}`
+    const wsProto = location.protocol === 'https:' ? 'wss' : 'ws'
+    const wsUrl = (import.meta.env.VITE_WS_URL || `${wsProto}://${location.host}`) + `/ws/workspace/${wid}?token=${accessToken}`
     const ws = new WebSocket(wsUrl)
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data)

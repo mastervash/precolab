@@ -19,7 +19,7 @@ function CollabEditor({ docId, user, accessToken }) {
     setReady(false)
     const ydoc = new Y.Doc()
     ydocRef.current = ydoc
-    const wsBase = import.meta.env.VITE_WS_URL || `ws://${location.host}`
+    const wsBase = import.meta.env.VITE_WS_URL || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
     const provider = new WebsocketProvider(
       `${wsBase}/ws/collab`, `doc:${docId}`, ydoc,
       { params: { token: accessToken } }
