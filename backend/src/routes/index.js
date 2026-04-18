@@ -1,3 +1,4 @@
+import configRoutes from './config.js'
 import authRoutes from './auth.js'
 import usersRoutes from './users.js'
 import workspacesRoutes from './workspaces.js'
@@ -15,6 +16,7 @@ import calendarRoutes from './calendar.js'
 import collaborationRoutes from './collaboration.js'
 
 export async function registerRoutes(fastify) {
+  await fastify.register(configRoutes, { prefix: '/api/config' })
   await fastify.register(authRoutes, { prefix: '/api/auth' })
   await fastify.register(usersRoutes, { prefix: '/api/users' })
   await fastify.register(workspacesRoutes, { prefix: '/api/workspaces' })
