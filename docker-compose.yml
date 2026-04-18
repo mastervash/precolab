@@ -15,6 +15,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - default
+      - cloudflared
 
   redis:
     image: redis:7-alpine
@@ -29,6 +32,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - default
+      - cloudflared
 
   backend:
     build:
@@ -44,6 +50,8 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       UPLOAD_DIR: /uploads
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      WORKSPACE_MODE: ${WORKSPACE_MODE:-multi}
+      WORKSPACE_NAME: ${WORKSPACE_NAME:-Team Workspace}
     volumes:
       - uploads:/uploads
     ports:
@@ -53,21 +61,32 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - default
+      - cloudflared
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000}
+        VITE_API_URL: ${VITE_API_URL-}
+        VITE_WS_URL: ${VITE_WS_URL-}
     restart: unless-stopped
     ports:
       - "5173:80"
     depends_on:
       - backend
+    networks:
+      - default
+      - cloudflared
 
 volumes:
   postgres_data:
   redis_data:
   uploads:
+
+networks:
+  default: {}
+  cloudflared:
+    external: true
