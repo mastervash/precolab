@@ -28,6 +28,9 @@ export default async function workspacesRoutes(fastify) {
       },
     },
   }, async (request, reply) => {
+    if (process.env.WORKSPACE_MODE === 'single') {
+      return reply.code(403).send({ error: 'Workspace creation is disabled in single-workspace mode' })
+    }
     const { name } = request.body
     const slug = `${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${nanoid(6)}`
     const client = await fastify.pg.connect()
