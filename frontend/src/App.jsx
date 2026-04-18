@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore.js'
+import { useConfigStore } from './store/configStore.js'
 import ToastContainer from './components/ui/Toast.jsx'
 import './store/themeStore.js' // apply saved theme on load
 import WorkspaceShell from './components/layout/WorkspaceShell.jsx'
@@ -32,6 +33,18 @@ function PublicRoute({ children }) {
 }
 
 export default function App() {
+  const setConfig = useConfigStore((s) => s.setConfig)
+  const workspaceMode = useConfigStore((s) => s.workspaceMode)
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then(setConfig)
+      .catch(() => setConfig({ workspaceMode: 'multi' }))
+  }, [])
+
+  if (!workspaceMode) return null
+
   return (
     <>
     <ToastContainer />
