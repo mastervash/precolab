@@ -34,16 +34,13 @@ function PublicRoute({ children }) {
 
 export default function App() {
   const setConfig = useConfigStore((s) => s.setConfig)
-  const workspaceMode = useConfigStore((s) => s.workspaceMode)
 
   useEffect(() => {
     fetch('/api/config')
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error('config fetch failed'); return r.json() })
       .then(setConfig)
       .catch(() => setConfig({ workspaceMode: 'multi' }))
-  }, [])
-
-  if (!workspaceMode) return null
+  }, [setConfig])
 
   return (
     <>
