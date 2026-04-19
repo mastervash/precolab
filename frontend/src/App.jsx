@@ -39,8 +39,8 @@ export default function App() {
     fetch('/api/config')
       .then((r) => { if (!r.ok) throw new Error('config fetch failed'); return r.json() })
       .then(setConfig)
-      .catch(() => setConfig({ workspaceMode: 'multi' }))
-  }, [setConfig])
+      .catch((err) => { console.warn('[config] fetch failed, defaulting to multi:', err); setConfig({ workspaceMode: 'multi' }) })
+  }, [])
 
   return (
     <>

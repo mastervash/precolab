@@ -75,9 +75,9 @@ export default function WorkspaceShell({ children }) {
   const [showInvite, setShowInvite] = useState(false)
 
   const workspaceMode = useConfigStore((s) => s.workspaceMode)
-  if (!workspaceMode) return null
-
   const isAdmin = currentWorkspace?.role === 'admin'
+
+  if (!workspaceMode) return null
 
   const THEME_CYCLE = { dark: 'dim', dim: 'light', light: 'dark' }
   const THEME_ICON = {
