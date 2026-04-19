@@ -65,6 +65,8 @@ docker compose up --build   # Start full stack (backend :3000, frontend :5173, p
 - claude-mem worker must be running for `smart_search`/`smart_outline`/`smart_unfold` tools; start with:
   `bun ~/.claude/plugins/cache/thedotmack/claude-mem/10.6.3/scripts/worker-service.cjs start`
 - New `.mcp.json` entries only load in the **next** Claude Code session (restart or `/hooks` to reload)
+- `.env` is not committed — copy from `.env.example` and generate JWT secrets with `openssl rand -hex 64`
+- App is served at `justas.fyi:5173` (not localhost) — API calls must go through nginx proxy, not hardcoded `localhost:3000`
 
 ## Architecture Overview
 
@@ -75,6 +77,13 @@ React + Vite SPA (port 5173) ↔ Fastify REST + WebSocket API (port 3000) ↔ Po
 - DB migrations: auto-applied on backend startup (`backend/src/db/migrations.js`)
 - Role middleware: `checkMembership(fastify)` factory + `denyViewer()` guard (`backend/src/middleware/workspace.js`)
 - Frontend state: Zustand auth store (`setAuth(user, workspaces, accessToken, refreshToken)`)
+
+## Docker / Deployment Gotchas
+
+- Backend Dockerfile needs `RUN apk add --no-cache python3 make g++` — `bcrypt` requires native compilation
+- Fastify plugin scoping: `fastify.register(plugin)` creates an encapsulated child scope; decorators like `fastify.pg` and `fastify.authenticate` won't be visible to sibling route plugins. All plugins in `backend/src/plugins/index.js` must be called directly: `await plugin(fastify)` (not `fastify.register(plugin)`)
+- nginx proxies `/api/` and `/ws` to the backend container — frontend uses relative URLs; don't set `VITE_API_URL` to a hardcoded host
+- In `docker-compose.yml` build args, use `${VAR-}` not `${VAR:-default}` for vars that should allow empty string — `:-` treats empty as unset and applies the default
 
 ## Conventions & Patterns
 
